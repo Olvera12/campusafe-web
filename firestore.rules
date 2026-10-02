@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function admin() { return signedIn() && request.auth.token.get('admin', false) == true; }
+    function position(p) {
+      return p is map && p.keys().hasOnly(['lat', 'lng'])
+        && p.lat is number && p.lng is number
+        && p.lat >= -90 && p.lat <= 90 && p.lng >= -180 && p.lng <= 180;
+    }
+    function validReport(d) {
+      return d.keys().hasOnly(['type','desc','location','cameraPosition','cameraPov','votesYes','votesNo','time','status','timestamp','userId','ownerUid'])
+        && d.keys().hasAll(['type','desc','location','votesYes','votesNo','time','status','timestamp','userId','ownerUid'])
+        && d.type in ['Bache','Tráfico','Bloqueo','trafico','cerrada']
+        && d.desc is string && d.desc.size() <= 2000
+        && d.userId is string && d.userId.size() <= 254
+        && d.time is string && d.time.size() <= 40
+        && position(d.location)
+        && (d.get('cameraPosition', null) == null || position(d.cameraPosition))
+        && d.get('cameraPov', {}) is map
+        && d.ownerUid == request.auth.uid && d.status == 'active'
+        && d.votesYes == 1 && d.votesNo == 0
+        && d.timestamp is int
+        && d.timestamp >= request.time.toMillis() - 300000
+        && d.timestamp <= request.time.toMillis() + 300000;
+    }
+    match /reports/{reportId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && validReport(request.resource.data);
+      allow update: if signedIn() && (
+        // Un voto modifica solamente su contador y no reescribe el reporte.
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votesYes'])
+          && resource.data.votesYes is int && request.resource.data.votesYes is int
+          && request.resource.data.votesYes == resource.data.votesYes + 1)
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votesNo'])
+          && resource.data.votesNo is int && request.resource.data.votesNo is int
+          && request.resource.data.votesNo == resource.data.votesNo + 1)
+        || (resource.data.get('ownerUid', '') == request.auth.uid
+          && resource.data.status in ['active','activo']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['timestamp'])
+          && request.resource.data.timestamp is int
+          && request.resource.data.timestamp >= request.time.toMillis() - 300000
+          && request.resource.data.timestamp <= request.time.toMillis() + 300000)
+        || (admin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','resolvedAt'])
+          && request.resource.data.status == 'resolved'
+          && request.resource.data.resolvedAt is int)
+      );
+      allow delete: if false;
+    }
+  }
+}

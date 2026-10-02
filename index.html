@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://maps.googleapis.com https://maps.gstatic.com https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://*.google.com https://*.googleapis.com https://*.gstatic.com https://*.googleusercontent.com https://*.ggpht.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://*.gstatic.com; font-src 'self' https://fonts.gstatic.com; worker-src 'self' blob:; frame-src https://*.firebaseapp.com; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>CampuSafe - UANL</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- Firebase SDK (Compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  
+  <script src="db.js"></script>
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.js"></script>
+  <style>
+    /* PWA Pointers */
+    body { -webkit-tap-highlight-color: transparent; }
+  </style>
+  
+</head>
+<body>
+
+  <!-- ==============================================
+       PANTALLA 1: MAPA PRINCIPAL
+  =============================================== -->
+  <div id="screen-map" class="screen active">
+    <!-- Overlay del Mapa Principal (se oculta en Street View) -->
+    <div id="main-map-overlay" class="title-overlay">
+      <div class="title-text">
+        <h1>CampuSafe</h1>
+        <p>Toca una calle para Street View.</p>
+      </div>
+    </div>
+
+    <!-- Botón Volver al Mapa -->
+    <div id="back-btn" class="back-btn" style="display: none;" data-click="ui-0">
+      <i data-lucide="arrow-left" color="#fff"></i> Volver al Mapa
+    </div>
+
+    <!-- ==============================================
+         NUEVO VISOR STREET VIEW A TODO COLOR (IMAGEN 2)
+    =============================================== -->
+    <div id="streetview-wrapper" class="streetview-wrapper">
+      <div id="sv-native" class="sv-native" tabindex="0" aria-label="Street View: haz clic para reportar"></div>
+
+      <!-- Tarjeta Superior Izquierda (Buscador y Ubicación como Imagen 2) -->
+      <div id="sv-top-container" class="sv-top-container">
+        <div class="sv-search-box">
+          <i data-lucide="search" class="sv-search-icon" style="width: 18px; height: 18px;"></i>
+          <input type="text" id="sv-search-input" class="sv-search-input" placeholder="Buscar en Google Maps" data-input="ui-1" data-keydown="ui-2">
+          <i data-lucide="navigation" class="sv-search-icon" style="width: 16px; height: 16px; color: #1a73e8;" data-click="ui-3"></i>
+        </div>
+        <div id="sv-suggestions" class="sv-suggestions"></div>
+
+        <div id="sv-location-card" class="sv-location-card">
+          <div class="sv-card-header">
+            <h3 id="sv-card-title" class="sv-card-title">Pedro de Alba</h3>
+          </div>
+          <p id="sv-card-subtitle" class="sv-card-subtitle">San Nicolás de los Garza, Nuevo León</p>
+          <div class="sv-card-meta">
+            <span class="sv-card-badge"><i data-lucide="map-pin" style="width: 12px; height: 12px;"></i> Google Street View</span>
+            <span>·</span>
+            <span id="sv-card-date">ago 2024</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Minimapa Inferior Izquierdo (Imagen 2) -->
+      <div id="sv-minimap-wrapper" class="sv-minimap-wrapper">
+        <div class="sv-minimap-header">
+          <button class="sv-minimap-btn" data-click="ui-4" title="Expandir/Minimizar">
+            <i id="sv-minimap-toggle-icon" data-lucide="minimize-2" style="width: 14px; height: 14px;"></i>
+          </button>
+        </div>
+        <div id="sv-minimap-map"></div>
+      </div>
+
+      <!-- Controles Inferiores Derechos (Brújula y Zoom como Imagen 2) -->
+      <div class="sv-controls-panel">
+        <div class="sv-compass" data-click="ui-5" title="Reorientar al Norte">
+          <i data-lucide="compass" style="width: 22px; height: 22px;"></i>
+        </div>
+        <div class="sv-zoom-group">
+          <button class="sv-zoom-btn" data-click="ui-6" title="Acercar">+</button>
+          <div class="sv-zoom-divider"></div>
+          <button class="sv-zoom-btn" data-click="ui-7" title="Alejar">−</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAPA PRINCIPAL SATELITAL DE FONDO -->
+    <div id="map"></div>
+
+    <!-- MENÚ SAO RADIAL -->
+    <div id="sao-menu" class="sao-menu-overlay" style="display: none;">
+      <div class="sao-ripple" id="sao-ripple"></div>
+      <div class="sao-center-point" id="sao-close"></div>
+      
+      <div class="sao-item item-1" data-click="ui-8">
+        <div class="sao-icon-bg"><i data-lucide="triangle-alert" color="#ff3b3b"></i></div>
+        <span class="sao-label">Bache</span>
+      </div>
+      <div class="sao-item item-2" data-click="ui-9">
+        <div class="sao-icon-bg"><i data-lucide="car" color="#ffb300"></i></div>
+        <span class="sao-label">Tráfico</span>
+      </div>
+      <div class="sao-item item-3" data-click="ui-10">
+        <div class="sao-icon-bg"><i data-lucide="traffic-cone" color="#ff8800"></i></div>
+        <span class="sao-label">Bloqueo</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==============================================
+       PANTALLA 2: FEED DE REPORTES
+  =============================================== -->
+  <div id="screen-feed" class="screen">
+    <div class="feed-header">
+      <h1>Reportes en Vivo</h1>
+    </div>
+    <div class="feed-list" id="feed-list-container">
+      <!-- Inyectado con JS -->
+    </div>
+  </div>
+
+  <!-- ==============================================
+       PANTALLA 3: MIS REPORTES
+  =============================================== -->
+  <div id="screen-profile" class="screen" style="display: none; background: #ecf0f1; height: 100vh; overflow-y: auto; padding-bottom: 80px;">
+    
+    <!-- VISTA DE LOGIN -->
+    <div id="login-view" class="login-container">
+      <i data-lucide="user-circle" style="width:64px; height:64px;"></i>
+      <h2>Mis reportes en este navegador</h2>
+      <p>Activa tu perfil de visitante. No necesitas matrícula, correo ni contraseña. Si borras los datos del navegador, perderás el acceso a tus reportes.</p>
+
+
+      <button class="btn-login" data-click="ui-11">Activar perfil</button>
+    </div>
+
+    <!-- VISTA DE PERFIL LOGUEADO -->
+    <div id="logged-view" style="display: none;">
+      <div class="feed-header">
+        <div class="profile-header-flex">
+          <h1>Mi Perfil</h1>
+          <button class="btn-logout" data-click="ui-12"><i data-lucide="log-out" style="width:14px;"></i> Salir</button>
+        </div>
+      </div>
+      <div id="my-reports-list" class="feed-list">
+        <!-- Tarjetas dinámicas -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ==============================================
+       BARRA DE NAVEGACIÓN INFERIOR
+  =============================================== -->
+  <div class="bottom-nav">
+    <div class="nav-item active" data-click="ui-13">
+      <i data-lucide="map"></i><span>Mapa</span>
+    </div>
+    <div class="nav-item" data-click="ui-14">
+      <i data-lucide="list"></i><span>Feed</span>
+    </div>
+    <div class="nav-item" data-click="ui-15">
+      <i data-lucide="user"></i><span>Mi Perfil</span>
+    </div>
+  </div>
+
+  <!-- ==============================================
+       MODAL 1: AÑADIR DETALLES AL CREAR
+  =============================================== -->
+  <div id="modal-add-details" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <i id="add-modal-icon" data-lucide="alert-circle" color="#ff9900"></i>
+        <h2 id="add-modal-title">Nuevo Reporte</h2>
+      </div>
+      <div class="form-group">
+        <label>¿Deseas añadir más detalles para ayudar a otros?</label>
+        <textarea id="add-modal-desc" placeholder="Ej: Es un pozo muy profundo en el carril derecho..." rows="3"></textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-cancel" data-click="ui-16">Cancelar</button>
+        <button class="btn btn-primary" data-click="ui-17">Publicar Reporte</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==============================================
+       MODAL 2: VER DETALLES DEL REPORTE (Sin votar)
+  =============================================== -->
+  <div id="modal-view-report" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <i id="view-modal-icon" data-lucide="info"></i>
+        <h2 id="view-modal-title">Detalles del Reporte</h2>
+      </div>
+      <p id="view-modal-desc" style="font-size: 14px; margin-bottom: 5px;"></p>
+      <p id="view-modal-time" style="font-size: 12px; color: #7f8c8d; margin-top: 0; margin-bottom: 20px;"></p>
+      <div class="btn-row" style="justify-content: space-between;">
+        <button class="btn btn-cancel" data-click="ui-18">Cerrar</button>
+        <button class="btn btn-primary" data-click="ui-19">Ver en Street View</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==============================================
+       MODAL 3: VOTAR AL SALIR (Anti-Trolls)
+  =============================================== -->
+  <div id="modal-vote" class="modal-overlay">
+    <div class="modal-content" style="text-align: center;">
+      <h2 style="margin-top:0;">Verificación</h2>
+      <p style="font-size: 14px; color: #7f8c8d; margin-bottom: 20px;">
+        Antes de salir, ¿el problema que acabas de ver sigue ahí?
+      </p>
+      <div class="vote-buttons">
+        <button class="btn-vote yes" data-click="ui-20">
+          <i data-lucide="thumbs-up"></i> Sí
+        </button>
+        <button class="btn-vote no" data-click="ui-21">
+          <i data-lucide="thumbs-down"></i> Ya no está
+        </button>
+      </div>
+      <div style="margin-top: 15px;">
+        <a href="#" data-click="ui-22" style="color: #95a5a6; font-size: 12px; text-decoration: none;">Omitir y salir al mapa</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==============================================
+       MODAL DE VERIFICACIÓN (AUTO-CADUCIDAD 8H)
+  =============================================== -->
+  <div id="verify-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 10000; justify-content: center; align-items: center; backdrop-filter: blur(5px);">
+    <div style="background: white; width: 90%; max-width: 350px; border-radius: 16px; padding: 25px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+      <div style="background: #f1c40f; width: 60px; height: 60px; border-radius: 30px; display: flex; justify-content: center; align-items: center; margin: 0 auto 15px auto;">
+        <i data-lucide="clock" style="color: white; width: 32px; height: 32px;"></i>
+      </div>
+      <h2 style="margin-top: 0; color: #2c3e50; font-size: 20px;">Revisión de Reporte</h2>
+      <p style="color: #7f8c8d; font-size: 14px; margin-bottom: 20px;" id="verify-modal-text">
+        Tu reporte generado hace más de 8 horas podría ya no estar activo. ¿Sigue el problema en ese lugar?
+      </p>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <button data-click="ui-23" style="background: #27ae60; color: white; border: none; padding: 15px; border-radius: 8px; font-weight: bold; font-size: 16px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+          <i data-lucide="check-circle"></i> Sigue activo (Renovar)
+        </button>
+        <button data-click="ui-24" style="background: #e74c3c; color: white; border: none; padding: 15px; border-radius: 8px; font-weight: bold; font-size: 16px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+          <i data-lucide="trash-2"></i> Ya se solucionó (Quitar)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==============================================
+       SCRIPT PRINCIPAL DE LA APP
+  =============================================== -->
+  
+  <script src="app.js"></script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDd6loC0VjAeccz_XfH8ew2r2VODyhkODo&libraries=geometry&loading=async&callback=initMap" async defer></script>
+</body>
+</html>

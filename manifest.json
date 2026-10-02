@@ -1,0 +1,9 @@
+{
+  "name": "CampuSafe - UANL",
+  "short_name": "CampuSafe",
+  "description": "Plataforma de inteligencia de riesgos y movilidad estudiantil de la UANL.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#ecf0f1",
+  "theme_color": "#2c3e50"
+}
