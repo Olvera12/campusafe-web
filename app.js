@@ -258,6 +258,99 @@
       lucide.createIcons();
     }
 
+    // Mantiene la esquina inferior izquierda fija al ampliar hacia arriba y a la derecha.
+    function setupMinimapResize() {
+      const wrapper = document.getElementById('sv-minimap-wrapper');
+      const handle = document.getElementById('sv-minimap-resize');
+      const storageKey = 'campusafe-minimap-size-v1';
+      let preferredSize = null;
+      let drag = null;
+      let mapResizeFrame = 0;
+      try {
+        const saved = JSON.parse(localStorage.getItem(storageKey));
+        if (saved && Number.isFinite(saved.width) && Number.isFinite(saved.height)) preferredSize = saved;
+      } catch (_) { /* El ajuste sigue funcionando si el almacenamiento está bloqueado. */ }
+
+      function applySize(size = preferredSize) {
+        const smallScreen = window.innerWidth <= 768;
+        const defaults = smallScreen ? { width: 260, height: 180 } : { width: 360, height: 240 };
+        const stage = wrapper.parentElement;
+        const styles = getComputedStyle(wrapper);
+        const left = parseFloat(styles.left) || 0;
+        const bottom = parseFloat(styles.bottom) || 0;
+        const stageWidth = stage.clientWidth || window.innerWidth;
+        const stageHeight = stage.clientHeight || Math.max(1, window.innerHeight - 60);
+        const maxWidth = Math.max(1, Math.min(720, stageWidth - left - 64));
+        const maxHeight = Math.max(1, stageHeight - bottom - 170);
+        const desired = size || defaults;
+        const width = Math.round(Math.max(Math.min(200, maxWidth), Math.min(desired.width, maxWidth)));
+        const height = Math.round(Math.max(Math.min(150, maxHeight), Math.min(desired.height, maxHeight)));
+        wrapper.style.setProperty('--sv-minimap-width', `${width}px`);
+        wrapper.style.setProperty('--sv-minimap-height', `${height}px`);
+        handle.setAttribute('aria-label', `Cambiar tamaño del minimapa: ${width} por ${height} píxeles`);
+      }
+
+      function rememberSize() {
+        try {
+          if (preferredSize) localStorage.setItem(storageKey, JSON.stringify(preferredSize));
+          else localStorage.removeItem(storageKey);
+        } catch (_) { /* Guardar el tamaño es opcional. */ }
+      }
+
+      handle.addEventListener('pointerdown', event => {
+        if (event.button !== 0 || !event.isPrimary || isMinimapMinimized) return;
+        event.preventDefault();
+        const bounds = wrapper.getBoundingClientRect();
+        drag = { id: event.pointerId, x: event.clientX, y: event.clientY, width: bounds.width, height: bounds.height };
+        wrapper.classList.add('resizing');
+        handle.setPointerCapture(event.pointerId);
+      });
+      handle.addEventListener('pointermove', event => {
+        if (!drag || drag.id !== event.pointerId) return;
+        event.preventDefault();
+        preferredSize = { width: drag.width + event.clientX - drag.x, height: drag.height + drag.y - event.clientY };
+        applySize();
+      });
+      function finishResize(event) {
+        if (!drag || drag.id !== event.pointerId) return;
+        drag = null;
+        wrapper.classList.remove('resizing');
+        // Guardar las dimensiones visibles, no un arrastre fuera de los límites.
+        const bounds = wrapper.getBoundingClientRect();
+        preferredSize = { width: bounds.width, height: bounds.height };
+        rememberSize();
+        if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+      }
+      ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(type => handle.addEventListener(type, finishResize));
+      handle.addEventListener('keydown', event => {
+        if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home'].includes(event.key)) return;
+        event.preventDefault();
+        const bounds = wrapper.getBoundingClientRect();
+        const step = event.shiftKey ? 40 : 20;
+        preferredSize = event.key === 'Home' ? null : {
+          width: bounds.width + (event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0),
+          height: bounds.height + (event.key === 'ArrowUp' ? step : event.key === 'ArrowDown' ? -step : 0)
+        };
+        applySize();
+        if (preferredSize) {
+          const resized = wrapper.getBoundingClientRect();
+          preferredSize = { width: resized.width, height: resized.height };
+        }
+        rememberSize();
+      });
+      window.addEventListener('resize', () => applySize());
+      new ResizeObserver(() => {
+        cancelAnimationFrame(mapResizeFrame);
+        mapResizeFrame = requestAnimationFrame(() => {
+          if (!svMinimapInstance || isMinimapMinimized) return;
+          const center = svMinimapInstance.getCenter();
+          google.maps.event.trigger(svMinimapInstance, 'resize');
+          if (center) svMinimapInstance.setCenter(center);
+        });
+      }).observe(wrapper);
+      applySize();
+    }
+
     function resetCompass() {
       currentSVHeading = 0;
       if (streetPanorama) streetPanorama.setPov({ ...streetPanorama.getPov(), heading: 0 });
@@ -766,3 +859,4 @@ const uiActions = {
 document.addEventListener('click', event => { const target = event.target.closest('[data-click]'); if (target) uiActions[target.dataset.click]?.call(target, event); });
 document.addEventListener('input', event => { const target = event.target.closest('[data-input]'); if (target) uiActions[target.dataset.input]?.call(target, event); });
 document.addEventListener('keydown', event => { const target = event.target.closest('[data-keydown]'); if (target) uiActions[target.dataset.keydown]?.call(target, event); });
+setupMinimapResize();

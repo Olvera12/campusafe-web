@@ -355,14 +355,15 @@ body, html {
   bottom: 20px;
   left: 20px;
   z-index: 102;
-  width: 250px;
-  height: 170px;
+  width: var(--sv-minimap-width, 360px);
+  height: var(--sv-minimap-height, 240px);
+  box-sizing: border-box;
   border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 6px 20px rgba(0,0,0,0.5);
   border: 2px solid #ffffff;
   background: #e5e3df;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: border-radius 0.25s, box-shadow 0.25s;
   pointer-events: auto;
 }
 
@@ -377,7 +378,7 @@ body, html {
 .sv-minimap-header {
   position: absolute;
   top: 6px;
-  right: 6px;
+  left: 6px;
   z-index: 10;
   display: flex;
   gap: 4px;
@@ -407,6 +408,28 @@ body, html {
   width: 100%;
   height: 100%;
 }
+
+.sv-minimap-resize {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 11;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(60,64,67,0.25);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.96);
+  color: #3c4043;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.3);
+  font-size: 25px;
+  line-height: 1;
+  cursor: nesw-resize;
+  touch-action: none;
+  user-select: none;
+}
+.sv-minimap-resize:focus-visible { outline: 3px solid #ff9900; outline-offset: 2px; }
+.sv-minimap-wrapper.minimized .sv-minimap-resize { display: none; }
+.sv-minimap-wrapper.resizing { user-select: none; }
 
 /* Marcador Pegman en Minimapa */
 .pegman-marker {
@@ -580,8 +603,8 @@ body, html {
   .sv-minimap-wrapper {
     bottom: 70px;
     left: 10px;
-    width: 125px;
-    height: 90px;
+    width: var(--sv-minimap-width, 260px);
+    height: var(--sv-minimap-height, 180px);
     border-radius: 8px;
   }
   
@@ -590,6 +613,7 @@ body, html {
     height: 36px;
     border-radius: 18px;
   }
+  .sv-minimap-resize { width: 40px; height: 40px; }
 
   .sv-controls-panel {
     bottom: 70px;
